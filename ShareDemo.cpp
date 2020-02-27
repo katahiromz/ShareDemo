@@ -258,21 +258,23 @@ void enter_key()
     fgets(buf, 8, stdin);
 }
 
-void MoveOwnership(DWORD pid)
+DWORD GetAnotherPid(DWORD pid)
 {
-    DWORD another_pid = 0;
-
     for (size_t i = 0; i < BLOCK_CAPACITY; ++i)
     {
-        if (s_first_block.items[i].id != 0 &&
-            s_first_block.items[i].pid != pid &&
-            IsProcessRunning(s_first_block.items[i].pid))
+        ITEM *item = &s_first_block.items[i];
+        if (item->id != 0 && item->pid != pid && IsProcessRunning(item->pid))
         {
-            another_pid = s_first_block.items[i].pid;
-            break;
+            return item->pid;
         }
     }
 
+    return 0;
+}
+
+void MoveOwnership(DWORD pid)
+{
+    DWORD another_pid = GetAnotherPid(pid);
     if (another_pid == 0)
         return;
 
