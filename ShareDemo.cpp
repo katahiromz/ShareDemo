@@ -170,8 +170,7 @@ bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block)
         block->num_items++;
         s_num_items++;
 
-        ++s_next_id;
-        int id = s_next_id;
+        int id = ++s_next_id;
         item->id = id;
         item->pid = context->pid;
 
@@ -186,12 +185,11 @@ int AddItem(DWORD pid)
 {
     SHARE_CONTEXT context = { NULL, &s_first_block, pid };
     DoEnumItems(&context, AddItemCallback);
-
     BLOCK *block = context.block;
+
     int id = context.id;
     if (id == 0)
     {
-        printf("BLOCK overflow\n");
         id = ++s_next_id;
 
         BLOCK new_block;
@@ -206,7 +204,6 @@ int AddItem(DWORD pid)
     }
 
     DoUnlockBlock(block);
-
     return id;
 }
 
@@ -255,7 +252,6 @@ void enter_key(void)
     fflush(stdout);
 
     char buf[8];
-    rewind(stdin);
     fgets(buf, 8, stdin);
 }
 
