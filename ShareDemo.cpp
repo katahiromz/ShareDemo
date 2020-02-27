@@ -131,8 +131,7 @@ bool CompactingCallback(SHARE_CONTEXT *context, BLOCK *block)
         if (!item->id)
             continue;
 
-        pItems[context->id] = *item;
-        context->id++;
+        pItems[context->id++] = *item;
     }
     return true;
 }
