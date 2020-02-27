@@ -284,8 +284,7 @@ void MoveOwnership(DWORD pid)
     {
         BLOCK *next_block = DoLock(block->hNext, block->ref_pid);
 
-        DWORD ref_pid = block->ref_pid;
-        if (ref_pid == pid)
+        if (block->ref_pid == pid)
         {
             if (!next_block)
             {
