@@ -248,7 +248,7 @@ bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
     return true;
 }
 
-void DisplayBlocks()
+void DisplayBlocks(void)
 {
     printf("s_num_items: %d\n", s_num_items);
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
@@ -256,7 +256,7 @@ void DisplayBlocks()
     DoUnlockBlock(context.block);
 }
 
-void enter_key()
+void enter_key(void)
 {
     printf("Press Enter key\n");
     fflush(stdout);
