@@ -73,7 +73,7 @@ LPVOID DoLock(HANDLE hShare, DWORD pid)
 
 void DoUnlock(LPVOID block)
 {
-    if (!block)
+    if (!block || (BLOCK *)block == &s_first_block)
         return;
 
     printf("unlock: %p\n", block);
@@ -116,8 +116,7 @@ void FindRoom(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
         }
         block = (BLOCK *)DoLock(hNext, ref_pid);
 
-        if (hShare && context->block)
-            DoUnlock(context->block);
+        DoUnlock(context->block);
 
         if (!block)
             return;
@@ -169,8 +168,7 @@ void DoCompactingBlocks()
 
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId(), 0, (LPARAM)&items };
     FindRoom(&context, CompactingCallback);
-    if (context.hShare && context.block)
-        DoUnlock(context.block);
+    DoUnlock(context.block);
 
     assert(context.id == s_num);
     assert(sizeof(s_first_block.items) == sizeof(items));
@@ -225,8 +223,7 @@ int AddItem(void)
         ++s_num;
     }
 
-    if (context.hShare && block)
-        DoUnlock(block);
+    DoUnlock(block);
 
     return id;
 }
@@ -264,8 +261,7 @@ void DisplayBlocks()
     s_iBlock = -1;
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
     FindRoom(&context, DisplayCallback);
-    if (context.hShare && context.block)
-        DoUnlock(context.block);
+    DoUnlock(context.block);
 }
 
 void enter_key()
@@ -320,32 +316,26 @@ void MoveOwnership(DWORD pid)
             block->hNext = hNewShare;
             block->ref_pid = another_pid;
 
-            if (block != &s_first_block)
-                DoUnlock(block);
+            DoUnlock(block);
 
             block = (BLOCK *)DoLock(hNewShare, another_pid);
         }
         else
         {
-            if (block != &s_first_block)
-                DoUnlock(block);
+            DoUnlock(block);
 
             block = next_block;
         }
     }
 
-    if (block != &s_first_block)
-    {
-        DoUnlock(block);
-    }
+    DoUnlock(block);
 }
 
 void RemoveItemByPid(DWORD pid)
 {
     SHARE_CONTEXT context = { NULL, &s_first_block, pid };
     FindRoom(&context, RemoveByPidCallback);
-    if (context.hShare && context.block)
-        DoUnlock(context.block);
+    DoUnlock(context.block);
 
     MoveOwnership(pid);
 
