@@ -91,7 +91,7 @@ void DoFree(HANDLE hShare, DWORD pid)
     SHFreeShared(hShare, pid);
 }
 
-void FindRoom(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
+void EnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
 {
     HANDLE hShare = context->hShare;
     BLOCK *block = context->block;
@@ -167,7 +167,7 @@ void DoCompactingBlocks()
     ZeroMemory(&items, sizeof(items));
 
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId(), 0, (LPARAM)&items };
-    FindRoom(&context, CompactingCallback);
+    EnumItems(&context, CompactingCallback);
     DoUnlock(context.block);
 
     assert(context.id == s_num);
@@ -202,7 +202,7 @@ bool AddItemCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *ite
 int AddItem(void)
 {
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
-    FindRoom(&context, AddItemCallback);
+    EnumItems(&context, AddItemCallback);
 
     BLOCK *block = context.block;
     int id = context.id;
@@ -260,7 +260,7 @@ void DisplayBlocks()
     printf("s_num: %d\n", s_num);
     s_iBlock = -1;
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
-    FindRoom(&context, DisplayCallback);
+    EnumItems(&context, DisplayCallback);
     DoUnlock(context.block);
 }
 
@@ -334,7 +334,7 @@ void MoveOwnership(DWORD pid)
 void RemoveItemByPid(DWORD pid)
 {
     SHARE_CONTEXT context = { NULL, &s_first_block, pid };
-    FindRoom(&context, RemoveByPidCallback);
+    EnumItems(&context, RemoveByPidCallback);
     DoUnlock(context.block);
 
     MoveOwnership(pid);
