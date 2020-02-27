@@ -96,7 +96,6 @@ void FindRoom(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
     HANDLE hShare = context->hShare;
     BLOCK *block = context->block;
     HANDLE hNext = block->hNext;
-    DWORD ref_pid = block->ref_pid;
     int iBlock = 0;
 
     for (;;)
@@ -110,7 +109,7 @@ void FindRoom(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
         if (!hNext)
             break;
 
-        ref_pid = block->ref_pid;
+        DWORD ref_pid = block->ref_pid;
         if (!IsProcessRunning(ref_pid))
         {
             break;
@@ -142,6 +141,7 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
         BLOCK *block = (BLOCK *)DoLock(hShare, ref_pid);
         if (!block)
             break;
+
         HANDLE hNext = block->hNext;
         ref_pid = block->ref_pid;
         DoUnlock(block);
