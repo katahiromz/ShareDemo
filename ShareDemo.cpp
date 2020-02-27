@@ -61,7 +61,7 @@ BOOL IsProcessRunning(DWORD pid)
 
 LPVOID DoLock(HANDLE hShare, DWORD pid)
 {
-    if (!IsProcessRunning(pid))
+    if (!hShare || !pid || !IsProcessRunning(pid))
     {
         return NULL;
     }
