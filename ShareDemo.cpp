@@ -48,7 +48,7 @@ typedef struct SHARE_CONTEXT
     LPARAM lParam;
 } SHARE_CONTEXT;
 
-typedef bool (*EACH_ITEM_PROC)(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item);
+typedef bool (*EACH_ITEM_PROC)(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item);
 
 BOOL IsProcessRunning(DWORD pid)
 {
@@ -72,6 +72,9 @@ LPVOID DoLock(HANDLE hShare, DWORD pid)
 
 void DoUnlock(LPVOID block)
 {
+    if (!block)
+        return;
+
     printf("unlock: %p\n", block);
     SHUnlockShared(block);
 }
@@ -93,7 +96,7 @@ void FindRoom(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
     BLOCK *block = context->block;
     HANDLE hNext = block->hNext;
     DWORD ref_pid = block->ref_pid;
-    size_t iBlock = 0;
+    int iBlock = 0;
 
     for (;;)
     {
@@ -146,7 +149,7 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
     } while (hShare);
 }
 
-bool CompactingCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item)
+bool CompactingCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
 {
     if (!item->id)
         return true;
@@ -180,7 +183,7 @@ void DoCompactingBlocks()
     s_first_block.ref_pid = 0;
 }
 
-bool AddItemCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item)
+bool AddItemCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
 {
     if (item->id != 0)
         return true;
@@ -227,7 +230,7 @@ int AddItem(void)
     return id;
 }
 
-bool RemoveByPidCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item)
+bool RemoveByPidCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
 {
     if (context->pid != item->pid || item->pid == 0)
         return true;
@@ -240,14 +243,14 @@ bool RemoveByPidCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, IT
     return true;
 }
 
-static size_t s_i = -1;
+static int s_i = -1;
 
-bool DisplayCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item)
+bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
 {
     if (s_i != iBlock)
     {
         s_i = iBlock;
-        printf("--- BLOCK %d ---\n", (int)iBlock);
+        printf("--- BLOCK %d ---\n", iBlock);
         printf("num:%d, hNext:%p, ref_pid:%u\n", block->num, block->hNext, block->ref_pid);
     }
     printf("id:%d, pid:%lu\n", item->id, item->pid);
