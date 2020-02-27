@@ -1,9 +1,7 @@
 #include <windows.h>
 #include <shlwapi.h>
 #include <cstdio>
-//#include <cassert>
-
-#define assert(x) if (!(x)) MessageBoxA(NULL, #x, NULL, 0);
+#include <cassert>
 
 typedef struct ITEM
 {
