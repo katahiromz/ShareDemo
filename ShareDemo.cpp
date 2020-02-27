@@ -1,7 +1,9 @@
 #include <windows.h>
 #include <shlwapi.h>
 #include <cstdio>
-#include <cassert>
+//#include <cassert>
+
+#define assert(x) if (!(x)) MessageBoxA(NULL, #x, NULL, 0);
 
 #ifdef _MSC_VER
     #define SHELL32SHARE
@@ -20,8 +22,9 @@ typedef struct ITEM
 typedef struct BLOCK
 {
     int num;
-    ITEM items[BLOCK_CAPACITY];
     HANDLE hNext;
+    DWORD ref_pid;
+    ITEM items[BLOCK_CAPACITY];
 } BLOCK;
 
 /* shared data section */
@@ -30,7 +33,7 @@ typedef struct BLOCK
 #endif
 static int s_num SHELL32SHARE = 0;
 static int s_next_id SHELL32SHARE = 0;
-static BLOCK s_first_block SHELL32SHARE = { 0 };
+static BLOCK s_first_block SHELL32SHARE = { 0, NULL, 0 };
 #ifdef _MSC_VER
     #pragma data_seg()
     #pragma comment(linker, "/SECTION:.shared,RWS")
@@ -47,11 +50,49 @@ typedef struct SHARE_CONTEXT
 
 typedef bool (*EACH_ITEM_PROC)(SHARE_CONTEXT *context, BLOCK *block, ITEM *item);
 
+BOOL IsProcessRunning(DWORD pid)
+{
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, TRUE, pid);
+    if (hProcess)
+        CloseHandle(hProcess);
+    return hProcess != NULL;
+}
+
+LPVOID DoLock(HANDLE hShare, DWORD pid)
+{
+    if (!IsProcessRunning(pid))
+    {
+        return NULL;
+    }
+
+    LPVOID pv = SHLockShared(hShare, pid);
+    printf("lock: %p, %u, %p\n", hShare, pid, pv);
+    return pv;
+}
+
+void DoUnlock(LPVOID block)
+{
+    printf("unlock: %p\n", block);
+    SHUnlockShared(block);
+}
+
+void DoFree(HANDLE hShare, DWORD pid)
+{
+    if (!IsProcessRunning(pid))
+    {
+        return;
+    }
+
+    printf("free: %p, %u\n", hShare, pid);
+    SHFreeShared(hShare, pid);
+}
+
 void FindRoom(SHARE_CONTEXT *context, INT id, EACH_ITEM_PROC proc)
 {
     HANDLE hShare = context->hShare;
     BLOCK *block = context->block;
     HANDLE hNext = block->hNext;
+    DWORD ref_pid = block->ref_pid;
 
     for (;;)
     {
@@ -64,12 +105,16 @@ void FindRoom(SHARE_CONTEXT *context, INT id, EACH_ITEM_PROC proc)
         if (!hNext)
             break;
 
-        block = (BLOCK *)SHLockShared(hNext, GetCurrentProcessId());
-        DWORD error = GetLastError();
-        assert(block);
+        ref_pid = block->ref_pid;
+        if (!IsProcessRunning(ref_pid))
+            break;
+        block = (BLOCK *)DoLock(hNext, ref_pid);
 
         if (hShare && context->block)
-            SHUnlockShared(context->block);
+            DoUnlock(context->block);
+
+        if (!block)
+            return;
 
         hShare = hNext;
         context->hShare = hShare;
@@ -97,7 +142,7 @@ bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
 
 bool RemoveByPidCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
 {
-    if (context->pid != item->pid)
+    if (context->pid != item->pid || item->pid == 0)
         return true;
 
     block->num--;
@@ -110,6 +155,9 @@ bool RemoveByPidCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
 
 bool CompactingCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
 {
+    if (!item->id)
+        return true;
+
     INT num = context->id;
     ITEM *pItems = (ITEM *)context->lParam;
     pItems[num] = *item;
@@ -117,16 +165,20 @@ bool CompactingCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
     return true;
 }
 
-void DoFreeBlocks(HANDLE hShare)
+void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
 {
+    if (!hShare)
+        return;
+
     do
     {
-        BLOCK *block = (BLOCK *)SHLockShared(hShare, GetCurrentProcessId());
+        BLOCK *block = (BLOCK *)DoLock(hShare, ref_pid);
         if (!block)
             break;
         HANDLE hNext = block->hNext;
-        SHUnlockShared(block);
-        SHFreeShared(hShare, GetCurrentProcessId());
+        ref_pid = block->ref_pid;
+        DoUnlock(block);
+        DoFree(hShare, ref_pid);
         hShare = hNext;
     } while (hShare);
 }
@@ -138,7 +190,8 @@ void DoCompactingBlocks()
 
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId(), 0, (LPARAM)&items };
     FindRoom(&context, 0, CompactingCallback);
-    SHUnlockShared(context.block);
+    if (context.hShare && context.block)
+        DoUnlock(context.block);
 
     assert(context.id == s_num);
     assert(sizeof(s_first_block.items) == sizeof(items));
@@ -148,7 +201,7 @@ void DoCompactingBlocks()
     s_first_block.num = context.id;
     s_first_block.hNext = NULL;
 
-    DoFreeBlocks(hNext);
+    DoFreeBlocks(hNext, s_first_block.ref_pid);
 }
 
 int AddItem(void)
@@ -166,15 +219,17 @@ int AddItem(void)
         BLOCK new_block;
         ZeroMemory(&new_block, sizeof(new_block));
         new_block.num = 1;
+        new_block.hNext = NULL;
         new_block.items[0].id = id;
         new_block.items[0].pid = GetCurrentProcessId();
-        new_block.hNext = NULL;
 
         block->hNext = SHAllocShared(&new_block, sizeof(BLOCK), GetCurrentProcessId());
+        block->ref_pid = GetCurrentProcessId();
+        ++s_num;
     }
 
     if (context.hShare && block)
-        SHUnlockShared(block);
+        DoUnlock(block);
 
     return id;
 }
@@ -184,10 +239,10 @@ void RemoveItemByPid(DWORD pid)
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
     FindRoom(&context, 0, RemoveByPidCallback);
     if (context.hShare && context.block)
-        SHUnlockShared(context.block);
+        DoUnlock(context.block);
 
-    //if (s_num < BLOCK_CAPACITY && s_first_block.hNext)
-    //    DoCompactingBlocks();
+    if (s_num < BLOCK_CAPACITY && s_first_block.hNext)
+        DoCompactingBlocks();
 }
 
 bool DisplayCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
@@ -205,10 +260,11 @@ bool DisplayCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
 
 void DisplayBlocks()
 {
+    printf("s_num: %d\n", s_num);
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
     FindRoom(&context, 0, DisplayCallback);
     if (context.hShare && context.block)
-        SHUnlockShared(context.block);
+        DoUnlock(context.block);
 }
 
 int main(void)
