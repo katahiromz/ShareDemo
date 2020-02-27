@@ -62,9 +62,7 @@ BOOL IsProcessRunning(DWORD pid)
 BLOCK *DoLock(HANDLE hShare, DWORD pid)
 {
     if (!hShare || !pid || !IsProcessRunning(pid))
-    {
         return NULL;
-    }
 
     LPVOID pv = SHLockShared(hShare, pid);
     printf("lock: %p, %u, %p\n", hShare, pid, pv);
@@ -83,9 +81,7 @@ void DoUnlock(LPVOID block)
 void DoFree(HANDLE hShare, DWORD pid)
 {
     if (!hShare || !pid || !IsProcessRunning(pid))
-    {
         return;
-    }
 
     printf("free: %p, %u\n", hShare, pid);
     SHFreeShared(hShare, pid);
