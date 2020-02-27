@@ -244,13 +244,13 @@ bool RemoveByPidCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM 
     return true;
 }
 
-static int s_i = -1;
+static int s_iBlock = -1;
 
 bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
 {
-    if (s_i != iBlock)
+    if (s_iBlock != iBlock)
     {
-        s_i = iBlock;
+        s_iBlock = iBlock;
         printf("--- BLOCK %d ---\n", iBlock);
         printf("num:%d, hNext:%p, ref_pid:%u\n", block->num, block->hNext, block->ref_pid);
     }
@@ -261,7 +261,7 @@ bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *ite
 void DisplayBlocks()
 {
     printf("s_num: %d\n", s_num);
-    s_i = -1;
+    s_iBlock = -1;
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
     FindRoom(&context, DisplayCallback);
     if (context.hShare && context.block)
