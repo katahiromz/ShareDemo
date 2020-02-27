@@ -101,8 +101,7 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
                 return;
         }
 
-        DWORD ref_pid = block->ref_pid;
-        block = DoLockBlock(hNext, ref_pid);
+        block = DoLockBlock(hNext, block->ref_pid);
         if (!block)
             return;
 
