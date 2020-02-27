@@ -124,15 +124,14 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
 
 bool CompactingCallback(SHARE_CONTEXT *context, BLOCK *block)
 {
+    ITEM *pItems = (ITEM *)context->lParam;
     for (int i = 0; i < BLOCK_CAPACITY; ++i)
     {
         ITEM *item = &block->items[i];
         if (!item->id)
             continue;
 
-        INT num_items = context->id;
-        ITEM *pItems = (ITEM *)context->lParam;
-        pItems[num_items] = *item;
+        pItems[context->id] = *item;
         context->id++;
     }
     return true;
