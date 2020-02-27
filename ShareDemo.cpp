@@ -149,7 +149,7 @@ bool CompactingCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *
     return true;
 }
 
-void DoCompactingBlocks()
+void DoCompactingBlocks(void)
 {
     ITEM items[BLOCK_CAPACITY];
     ZeroMemory(&items, sizeof(items));
