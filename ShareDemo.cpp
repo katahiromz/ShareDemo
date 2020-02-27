@@ -317,15 +317,15 @@ void RemoveItemByPid(DWORD pid)
 
 int main(void)
 {
-    printf("pid: %lu\n", GetCurrentProcessId());
-    int id = AddItem(GetCurrentProcessId());
-    printf("id %d added\n", id);
+    DWORD pid = GetCurrentProcessId();
+    printf("pid: %lu\n", pid);
 
+    int id = AddItem(pid);
+    printf("id %d added\n", id);
     DisplayBlocks();
     enter_key();
 
-    RemoveItemByPid(GetCurrentProcessId());
-
+    RemoveItemByPid(pid);
     DisplayBlocks();
     enter_key();
 
