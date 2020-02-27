@@ -244,9 +244,7 @@ void enter_key(void)
 {
     printf("Press Enter key\n");
     fflush(stdout);
-
-    char buf[8];
-    fgets(buf, 8, stdin);
+    getchar();
 }
 
 DWORD GetAnotherPid(DWORD pid)
@@ -259,7 +257,6 @@ DWORD GetAnotherPid(DWORD pid)
             return item->pid;
         }
     }
-
     return 0;
 }
 
