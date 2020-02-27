@@ -141,7 +141,6 @@ void DoCompactBlocks(void)
     assert(s_num_items <= BLOCK_CAPACITY);
 
     ITEM items[BLOCK_CAPACITY] = { { 0 } };
-
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId(), 0, (LPARAM)&items };
     DoEnumItems(&context, CompactingCallback);
     DoUnlockBlock(context.block);
