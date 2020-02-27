@@ -172,7 +172,6 @@ bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block)
         int id = ++s_next_id;
         item->id = id;
         item->pid = context->pid;
-
         context->id = id;
         return false;
     }
