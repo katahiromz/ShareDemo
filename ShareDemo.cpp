@@ -110,16 +110,11 @@ void EnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
             break;
 
         DWORD ref_pid = block->ref_pid;
-        if (!IsProcessRunning(ref_pid))
-        {
-            break;
-        }
         block = (BLOCK *)DoLock(hNext, ref_pid);
-
-        DoUnlock(context->block);
-
         if (!block)
             return;
+
+        DoUnlock(context->block);
 
         hShare = hNext;
         context->hShare = hShare;
