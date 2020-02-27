@@ -316,7 +316,7 @@ void RemoveItemByPid(DWORD pid)
 
     MoveOwnership(pid);
 
-    if (s_num_items < BLOCK_CAPACITY && s_first_block.hNext)
+    if (s_num_items <= BLOCK_CAPACITY && s_first_block.hNext)
     {
         DoCompactBlocks();
     }
