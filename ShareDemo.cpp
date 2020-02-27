@@ -120,7 +120,7 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
 
 void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
 {
-    if (!hShare)
+    if (!hShare || !ref_pid)
         return;
 
     do
