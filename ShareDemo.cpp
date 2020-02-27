@@ -202,7 +202,6 @@ int AddItem(DWORD pid)
         BLOCK new_block;
         ZeroMemory(&new_block, sizeof(new_block));
         new_block.num = 1;
-        new_block.hNext = NULL;
         new_block.items[0].id = id;
         new_block.items[0].pid = pid;
 
