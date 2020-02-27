@@ -5,12 +5,6 @@
 
 #define assert(x) if (!(x)) MessageBoxA(NULL, #x, NULL, 0);
 
-#ifdef _MSC_VER
-    #define SHELL32SHARE
-#else
-    #define SHELL32SHARE __attribute__((section(".shared"), shared))
-#endif
-
 typedef struct ITEM
 {
     int id;
@@ -28,6 +22,13 @@ typedef struct BLOCK
 } BLOCK;
 
 /* shared data section */
+
+#ifdef _MSC_VER
+    #define SHELL32SHARE
+#else
+    #define SHELL32SHARE __attribute__((section(".shared"), shared))
+#endif
+
 #ifdef _MSC_VER
     #pragma data_seg(".shared")
 #endif
