@@ -34,7 +34,7 @@ typedef struct BLOCK
 #endif
 static int s_num_items SHELL32SHARE = 0;
 static int s_next_id SHELL32SHARE = 0;
-static BLOCK s_first_block SHELL32SHARE = { 0, NULL, 0 };
+static BLOCK s_first_block SHELL32SHARE = { 0 };
 #ifdef _MSC_VER
     #pragma data_seg()
     #pragma comment(linker, "/SECTION:.shared,RWS")
