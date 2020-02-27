@@ -49,7 +49,7 @@ typedef struct SHARE_CONTEXT
     LPARAM lParam;
 } SHARE_CONTEXT;
 
-typedef bool (*EACH_BLOCK_PROC)(SHARE_CONTEXT *context, int iBlock, BLOCK *block);
+typedef bool (*EACH_BLOCK_PROC)(SHARE_CONTEXT *context, BLOCK *block);
 
 BOOL IsProcessRunning(DWORD pid)
 {
@@ -92,11 +92,8 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_BLOCK_PROC proc)
     BLOCK *block = context->block;
     HANDLE hNext = block->hNext;
 
-    for (int iBlock = 0; ; ++iBlock)
+    while ((*proc)(context, block))
     {
-        if (!(*proc)(context, iBlock, block))
-            return;
-
         block = DoLockBlock(hNext, block->ref_pid);
         if (!block)
             return;
@@ -128,7 +125,7 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
     } while (hShare);
 }
 
-bool CompactingCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
+bool CompactingCallback(SHARE_CONTEXT *context, BLOCK *block)
 {
     for (int i = 0; i < BLOCK_CAPACITY; ++i)
     {
@@ -167,7 +164,7 @@ void DoCompactBlocks(void)
     s_first_block.ref_pid = 0;
 }
 
-bool AddItemCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
+bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block)
 {
     for (int i = 0; i < BLOCK_CAPACITY; ++i)
     {
@@ -218,7 +215,7 @@ int AddItem(DWORD pid)
     return id;
 }
 
-bool RemoveByPidCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
+bool RemoveByPidCallback(SHARE_CONTEXT *context, BLOCK *block)
 {
     for (int i = 0; i < BLOCK_CAPACITY; ++i)
     {
@@ -234,9 +231,9 @@ bool RemoveByPidCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
     return true;
 }
 
-bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
+bool DisplayCallback(SHARE_CONTEXT *context, BLOCK *block)
 {
-    printf("--- BLOCK %d ---\n", iBlock);
+    printf("--- BLOCK %d ---\n", context->id );
     printf("num_items:%d, hNext:%p, ref_pid:%u\n", block->num_items, block->hNext, block->ref_pid);
 
     for (int i = 0; i < BLOCK_CAPACITY; ++i)
@@ -245,6 +242,7 @@ bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
         printf("id:%d, pid:%lu\n", item->id, item->pid);
     }
 
+    context->id++;
     return true;
 }
 
