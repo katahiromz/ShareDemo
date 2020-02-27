@@ -59,7 +59,7 @@ BOOL IsProcessRunning(DWORD pid)
     return hProcess != NULL;
 }
 
-LPVOID DoLock(HANDLE hShare, DWORD pid)
+BLOCK *DoLock(HANDLE hShare, DWORD pid)
 {
     if (!hShare || !pid || !IsProcessRunning(pid))
     {
@@ -68,7 +68,7 @@ LPVOID DoLock(HANDLE hShare, DWORD pid)
 
     LPVOID pv = SHLockShared(hShare, pid);
     printf("lock: %p, %u, %p\n", hShare, pid, pv);
-    return pv;
+    return (BLOCK *)pv;
 }
 
 void DoUnlock(LPVOID block)
@@ -110,7 +110,7 @@ void EnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
             break;
 
         DWORD ref_pid = block->ref_pid;
-        block = (BLOCK *)DoLock(hNext, ref_pid);
+        block = DoLock(hNext, ref_pid);
         if (!block)
             return;
 
@@ -132,7 +132,7 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
 
     do
     {
-        BLOCK *block = (BLOCK *)DoLock(hShare, ref_pid);
+        BLOCK *block = DoLock(hShare, ref_pid);
         if (!block)
             break;
 
@@ -294,7 +294,7 @@ void MoveOwnership(DWORD pid)
         BLOCK *next_block = NULL;
         if (block->hNext)
         {
-            next_block = (BLOCK *)DoLock(block->hNext, block->ref_pid);
+            next_block = DoLock(block->hNext, block->ref_pid);
         }
 
         DWORD ref_pid = block->ref_pid;
@@ -313,7 +313,7 @@ void MoveOwnership(DWORD pid)
 
             DoUnlock(block);
 
-            block = (BLOCK *)DoLock(hNewShare, another_pid);
+            block = DoLock(hNewShare, another_pid);
         }
         else
         {
