@@ -14,9 +14,9 @@ typedef struct ITEM
 typedef struct BLOCK
 {
     int num_items;
+    ITEM items[BLOCK_CAPACITY];
     HANDLE hNext;
     DWORD ref_pid;
-    ITEM items[BLOCK_CAPACITY];
 } BLOCK;
 
 /* shared data section */
@@ -140,8 +140,7 @@ void DoCompactBlocks(void)
 {
     assert(s_num_items <= BLOCK_CAPACITY);
 
-    ITEM items[BLOCK_CAPACITY];
-    ZeroMemory(&items, sizeof(items));
+    ITEM items[BLOCK_CAPACITY] = { { 0 } };
 
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId(), 0, (LPARAM)&items };
     DoEnumItems(&context, CompactingCallback);
@@ -192,12 +191,7 @@ int AddItem(DWORD pid)
     {
         id = ++s_next_id;
 
-        BLOCK new_block;
-        ZeroMemory(&new_block, sizeof(new_block));
-        new_block.num_items = 1;
-        new_block.items[0].id = id;
-        new_block.items[0].pid = pid;
-
+        BLOCK new_block = { 1, { id, pid } };
         block->hNext = SHAllocShared(&new_block, sizeof(BLOCK), pid);
         block->ref_pid = pid;
         ++s_num_items;
