@@ -187,9 +187,9 @@ bool AddItemCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *ite
     return false;
 }
 
-int AddItem(void)
+int AddItem(DWORD pid)
 {
-    SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
+    SHARE_CONTEXT context = { NULL, &s_first_block, pid };
     DoEnumItems(&context, AddItemCallback);
 
     BLOCK *block = context.block;
@@ -204,10 +204,10 @@ int AddItem(void)
         new_block.num = 1;
         new_block.hNext = NULL;
         new_block.items[0].id = id;
-        new_block.items[0].pid = GetCurrentProcessId();
+        new_block.items[0].pid = pid;
 
-        block->hNext = SHAllocShared(&new_block, sizeof(BLOCK), GetCurrentProcessId());
-        block->ref_pid = GetCurrentProcessId();
+        block->hNext = SHAllocShared(&new_block, sizeof(BLOCK), pid);
+        block->ref_pid = pid;
         ++s_num;
     }
 
@@ -336,7 +336,7 @@ void RemoveItemByPid(DWORD pid)
 int main(void)
 {
     printf("pid: %lu\n", GetCurrentProcessId());
-    int id = AddItem();
+    int id = AddItem(GetCurrentProcessId());
     printf("id %d added\n", id);
 
     DisplayBlocks();
