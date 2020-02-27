@@ -15,7 +15,7 @@ typedef struct ITEM
 
 typedef struct BLOCK
 {
-    int num;
+    int num_items;
     HANDLE hNext;
     DWORD ref_pid;
     ITEM items[BLOCK_CAPACITY];
@@ -32,7 +32,7 @@ typedef struct BLOCK
 #ifdef _MSC_VER
     #pragma data_seg(".shared")
 #endif
-static int s_num SHELL32SHARE = 0;
+static int s_num_items SHELL32SHARE = 0;
 static int s_next_id SHELL32SHARE = 0;
 static BLOCK s_first_block SHELL32SHARE = { 0, NULL, 0 };
 #ifdef _MSC_VER
@@ -139,15 +139,17 @@ bool CompactingCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *
     if (!item->id)
         return true;
 
-    INT num = context->id;
+    INT num_items = context->id;
     ITEM *pItems = (ITEM *)context->lParam;
-    pItems[num] = *item;
+    pItems[num_items] = *item;
     context->id++;
     return true;
 }
 
 void DoCompactingBlocks(void)
 {
+    assert(s_num_items <= BLOCK_CAPACITY);
+
     ITEM items[BLOCK_CAPACITY];
     ZeroMemory(&items, sizeof(items));
 
@@ -155,12 +157,12 @@ void DoCompactingBlocks(void)
     DoEnumItems(&context, CompactingCallback);
     DoUnlock(context.block);
 
-    assert(context.id == s_num);
+    assert(context.id == s_num_items);
     assert(sizeof(s_first_block.items) == sizeof(items));
 
     HANDLE hNext = s_first_block.hNext;
     CopyMemory(&s_first_block.items, &items, sizeof(s_first_block.items));
-    s_first_block.num = context.id;
+    s_first_block.num_items = context.id;
     s_first_block.hNext = NULL;
 
     DoFreeBlocks(hNext, s_first_block.ref_pid);
@@ -172,8 +174,8 @@ bool AddItemCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *ite
     if (item->id != 0)
         return true;
 
-    block->num++;
-    s_num++;
+    block->num_items++;
+    s_num_items++;
 
     ++s_next_id;
     int id = s_next_id;
@@ -198,13 +200,13 @@ int AddItem(DWORD pid)
 
         BLOCK new_block;
         ZeroMemory(&new_block, sizeof(new_block));
-        new_block.num = 1;
+        new_block.num_items = 1;
         new_block.items[0].id = id;
         new_block.items[0].pid = pid;
 
         block->hNext = SHAllocShared(&new_block, sizeof(BLOCK), pid);
         block->ref_pid = pid;
-        ++s_num;
+        ++s_num_items;
     }
 
     DoUnlock(block);
@@ -217,8 +219,8 @@ bool RemoveByPidCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM 
     if (context->pid != item->pid || item->pid == 0)
         return true;
 
-    block->num--;
-    s_num--;
+    block->num_items--;
+    s_num_items--;
     item->id = 0;
     item->pid = 0;
 
@@ -233,7 +235,7 @@ bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *ite
     {
         s_iBlock = iBlock;
         printf("--- BLOCK %d ---\n", iBlock);
-        printf("num:%d, hNext:%p, ref_pid:%u\n", block->num, block->hNext, block->ref_pid);
+        printf("num_items:%d, hNext:%p, ref_pid:%u\n", block->num_items, block->hNext, block->ref_pid);
     }
     printf("id:%d, pid:%lu\n", item->id, item->pid);
     return true;
@@ -241,7 +243,7 @@ bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *ite
 
 void DisplayBlocks()
 {
-    printf("s_num: %d\n", s_num);
+    printf("s_num_items: %d\n", s_num_items);
     s_iBlock = -1;
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
     DoEnumItems(&context, DisplayCallback);
@@ -318,7 +320,7 @@ void RemoveItemByPid(DWORD pid)
 
     MoveOwnership(pid);
 
-    if (s_num < BLOCK_CAPACITY && s_first_block.hNext)
+    if (s_num_items < BLOCK_CAPACITY && s_first_block.hNext)
     {
         DoCompactingBlocks();
     }
