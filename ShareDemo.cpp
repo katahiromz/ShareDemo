@@ -59,7 +59,7 @@ BOOL IsProcessRunning(DWORD pid)
     return hProcess != NULL;
 }
 
-BLOCK *DoLock(HANDLE hShare, DWORD pid)
+BLOCK *DoLockBlock(HANDLE hShare, DWORD pid)
 {
     if (!hShare || !pid || !IsProcessRunning(pid))
         return NULL;
@@ -69,7 +69,7 @@ BLOCK *DoLock(HANDLE hShare, DWORD pid)
     return (BLOCK *)pv;
 }
 
-void DoUnlock(LPVOID block)
+void DoUnlockBlock(LPVOID block)
 {
     if (!block || (BLOCK *)block == &s_first_block)
         return;
@@ -78,7 +78,7 @@ void DoUnlock(LPVOID block)
     SHUnlockShared(block);
 }
 
-void DoFree(HANDLE hShare, DWORD pid)
+void DoFreeBlock(HANDLE hShare, DWORD pid)
 {
     if (!hShare || !pid || !IsProcessRunning(pid))
         return;
@@ -102,11 +102,11 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
         }
 
         DWORD ref_pid = block->ref_pid;
-        block = DoLock(hNext, ref_pid);
+        block = DoLockBlock(hNext, ref_pid);
         if (!block)
             return;
 
-        DoUnlock(context->block);
+        DoUnlockBlock(context->block);
 
         hShare = hNext;
         context->hShare = hShare;
@@ -122,14 +122,14 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
 
     do
     {
-        BLOCK *block = DoLock(hShare, ref_pid);
+        BLOCK *block = DoLockBlock(hShare, ref_pid);
         if (!block)
             break;
 
         HANDLE hNext = block->hNext;
         ref_pid = block->ref_pid;
-        DoUnlock(block);
-        DoFree(hShare, ref_pid);
+        DoUnlockBlock(block);
+        DoFreeBlock(hShare, ref_pid);
         hShare = hNext;
     } while (hShare);
 }
@@ -146,7 +146,7 @@ bool CompactingCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *
     return true;
 }
 
-void DoCompactingBlocks(void)
+void DoCompactBlocks(void)
 {
     assert(s_num_items <= BLOCK_CAPACITY);
 
@@ -155,7 +155,7 @@ void DoCompactingBlocks(void)
 
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId(), 0, (LPARAM)&items };
     DoEnumItems(&context, CompactingCallback);
-    DoUnlock(context.block);
+    DoUnlockBlock(context.block);
 
     assert(context.id == s_num_items);
     assert(sizeof(s_first_block.items) == sizeof(items));
@@ -209,7 +209,7 @@ int AddItem(DWORD pid)
         ++s_num_items;
     }
 
-    DoUnlock(block);
+    DoUnlockBlock(block);
 
     return id;
 }
@@ -223,7 +223,6 @@ bool RemoveByPidCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM 
     s_num_items--;
     item->id = 0;
     item->pid = 0;
-
     return true;
 }
 
@@ -247,7 +246,7 @@ void DisplayBlocks()
     s_iBlock = -1;
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
     DoEnumItems(&context, DisplayCallback);
-    DoUnlock(context.block);
+    DoUnlockBlock(context.block);
 }
 
 void enter_key()
@@ -284,7 +283,7 @@ void MoveOwnership(DWORD pid)
 
     do
     {
-        BLOCK *next_block = DoLock(block->hNext, block->ref_pid);
+        BLOCK *next_block = DoLockBlock(block->hNext, block->ref_pid);
 
         if (block->ref_pid == pid)
         {
@@ -299,30 +298,30 @@ void MoveOwnership(DWORD pid)
             block->hNext = hNewShare;
             block->ref_pid = another_pid;
 
-            DoUnlock(block);
-            block = DoLock(hNewShare, another_pid);
+            DoUnlockBlock(block);
+            block = DoLockBlock(hNewShare, another_pid);
         }
         else
         {
-            DoUnlock(block);
+            DoUnlockBlock(block);
             block = next_block;
         }
     } while (block);
 
-    DoUnlock(block);
+    DoUnlockBlock(block);
 }
 
 void RemoveItemByPid(DWORD pid)
 {
     SHARE_CONTEXT context = { NULL, &s_first_block, pid };
     DoEnumItems(&context, RemoveByPidCallback);
-    DoUnlock(context.block);
+    DoUnlockBlock(context.block);
 
     MoveOwnership(pid);
 
     if (s_num_items < BLOCK_CAPACITY && s_first_block.hNext)
     {
-        DoCompactingBlocks();
+        DoCompactBlocks();
     }
 }
 
