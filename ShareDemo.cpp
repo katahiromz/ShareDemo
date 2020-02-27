@@ -270,6 +270,9 @@ void DisplayBlocks()
 
 void enter_key()
 {
+    printf("Press Enter key\n");
+    fflush(stdout);
+
     char buf[8];
     rewind(stdin);
     fgets(buf, 8, stdin);
@@ -357,17 +360,13 @@ int main(void)
     printf("pid: %lu\n", GetCurrentProcessId());
     int id = AddItem();
     printf("id %d added\n", id);
-    DisplayBlocks();
 
-    printf("Press Enter key\n");
-    fflush(stdout);
+    DisplayBlocks();
     enter_key();
 
     RemoveItemByPid(GetCurrentProcessId());
 
     DisplayBlocks();
-    printf("Press Enter key\n");
-    fflush(stdout);
     enter_key();
 
     return 0;
