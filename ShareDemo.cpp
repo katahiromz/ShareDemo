@@ -48,7 +48,7 @@ typedef struct SHARE_CONTEXT
     LPARAM lParam;
 } SHARE_CONTEXT;
 
-typedef bool (*EACH_ITEM_PROC)(SHARE_CONTEXT *context, BLOCK *block, ITEM *item);
+typedef bool (*EACH_ITEM_PROC)(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item);
 
 BOOL IsProcessRunning(DWORD pid)
 {
@@ -87,18 +87,19 @@ void DoFree(HANDLE hShare, DWORD pid)
     SHFreeShared(hShare, pid);
 }
 
-void FindRoom(SHARE_CONTEXT *context, INT id, EACH_ITEM_PROC proc)
+void FindRoom(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
 {
     HANDLE hShare = context->hShare;
     BLOCK *block = context->block;
     HANDLE hNext = block->hNext;
     DWORD ref_pid = block->ref_pid;
+    size_t iBlock = 0;
 
     for (;;)
     {
         for (int i = 0; i < BLOCK_CAPACITY; ++i)
         {
-            if (!(*proc)(context, block, &block->items[i]))
+            if (!(*proc)(context, iBlock, block, &block->items[i]))
                 return;
         }
 
@@ -122,6 +123,8 @@ void FindRoom(SHARE_CONTEXT *context, INT id, EACH_ITEM_PROC proc)
         context->hShare = hShare;
         context->block = block;
         hNext = block->hNext;
+
+        ++iBlock;
     }
 }
 
@@ -143,7 +146,7 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
     } while (hShare);
 }
 
-bool CompactingCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
+bool CompactingCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item)
 {
     if (!item->id)
         return true;
@@ -161,7 +164,7 @@ void DoCompactingBlocks()
     ZeroMemory(&items, sizeof(items));
 
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId(), 0, (LPARAM)&items };
-    FindRoom(&context, 0, CompactingCallback);
+    FindRoom(&context, CompactingCallback);
     if (context.hShare && context.block)
         DoUnlock(context.block);
 
@@ -177,7 +180,7 @@ void DoCompactingBlocks()
     s_first_block.ref_pid = 0;
 }
 
-bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
+bool AddItemCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item)
 {
     if (item->id != 0)
         return true;
@@ -197,7 +200,7 @@ bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
 int AddItem(void)
 {
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
-    FindRoom(&context, 0, AddItemCallback);
+    FindRoom(&context, AddItemCallback);
 
     BLOCK *block = context.block;
     int id = context.id;
@@ -224,7 +227,7 @@ int AddItem(void)
     return id;
 }
 
-bool RemoveByPidCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
+bool RemoveByPidCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item)
 {
     if (context->pid != item->pid || item->pid == 0)
         return true;
@@ -237,13 +240,14 @@ bool RemoveByPidCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
     return true;
 }
 
-bool DisplayCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
+static size_t s_i = -1;
+
+bool DisplayCallback(SHARE_CONTEXT *context, size_t iBlock, BLOCK *block, ITEM *item)
 {
-    static BLOCK *s_block = NULL;
-    if (s_block != block)
+    if (s_i != iBlock)
     {
-        s_block = block;
-        printf("--- BLOCK ---\n");
+        s_i = iBlock;
+        printf("--- BLOCK %d ---\n", (int)iBlock);
         printf("num:%d, hNext:%p, ref_pid:%u\n", block->num, block->hNext, block->ref_pid);
     }
     printf("id:%d, pid:%lu\n", item->id, item->pid);
@@ -253,8 +257,9 @@ bool DisplayCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
 void DisplayBlocks()
 {
     printf("s_num: %d\n", s_num);
+    s_i = -1;
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
-    FindRoom(&context, 0, DisplayCallback);
+    FindRoom(&context, DisplayCallback);
     if (context.hShare && context.block)
         DoUnlock(context.block);
 }
@@ -285,40 +290,41 @@ void MoveOwnership(DWORD pid)
         return;
 
     BLOCK *block = &s_first_block;
-    HANDLE hShare = NULL;
-    DWORD ref_pid = block->ref_pid;
 
-    while (block->hNext)
+    while (block)
     {
-        BLOCK *next_block = (BLOCK *)DoLock(block->hNext, block->ref_pid);
-        if (!next_block)
-            break;
+        BLOCK *next_block = NULL;
+        if (block->hNext)
+        {
+            next_block = (BLOCK *)DoLock(block->hNext, block->ref_pid);
+        }
 
+        DWORD ref_pid = block->ref_pid;
         if (ref_pid == pid)
         {
-            HANDLE hNewShare = SHAllocShared(next_block, sizeof(BLOCK), another_pid);
-            if (hShare)
-                DoFree(hShare, pid);
+            if (!next_block)
+            {
+                block->hNext = NULL;
+                block->ref_pid = 0;
+                break;
+            }
 
+            HANDLE hNewShare = SHAllocShared(next_block, sizeof(BLOCK), another_pid);
             block->hNext = hNewShare;
             block->ref_pid = another_pid;
-            DoUnlock(block);
 
-            hShare = hNewShare;
-            block = (BLOCK *)DoLock(hShare, ref_pid);
+            if (block != &s_first_block)
+                DoUnlock(block);
+
+            block = (BLOCK *)DoLock(hNewShare, another_pid);
         }
         else
         {
-            hShare = next_block->hNext;
-            DoUnlock(block);
+            if (block != &s_first_block)
+                DoUnlock(block);
+
             block = next_block;
         }
-    }
-
-    if (!IsProcessRunning(block->ref_pid))
-    {
-        block->hNext = NULL;
-        block->ref_pid = 0;
     }
 
     if (block != &s_first_block)
@@ -329,20 +335,22 @@ void MoveOwnership(DWORD pid)
 
 void RemoveItemByPid(DWORD pid)
 {
-    SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
-    FindRoom(&context, 0, RemoveByPidCallback);
+    SHARE_CONTEXT context = { NULL, &s_first_block, pid };
+    FindRoom(&context, RemoveByPidCallback);
     if (context.hShare && context.block)
         DoUnlock(context.block);
 
     MoveOwnership(pid);
 
     if (s_num < BLOCK_CAPACITY && s_first_block.hNext)
+    {
         DoCompactingBlocks();
+    }
 }
 
 int main(void)
 {
-    printf("pid<>: %lu\n", GetCurrentProcessId());
+    printf("pid: %lu\n", GetCurrentProcessId());
     int id = AddItem();
     printf("id %d added\n", id);
     DisplayBlocks();
@@ -357,5 +365,6 @@ int main(void)
     printf("Press Enter key\n");
     fflush(stdout);
     enter_key();
+
     return 0;
 }
