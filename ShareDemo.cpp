@@ -89,7 +89,6 @@ void DoFreeBlock(HANDLE hShare, DWORD pid)
 
 void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
 {
-    HANDLE hShare = context->hShare;
     BLOCK *block = context->block;
     HANDLE hNext = block->hNext;
 
@@ -107,8 +106,7 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
 
         DoUnlockBlock(context->block);
 
-        hShare = hNext;
-        context->hShare = hShare;
+        context->hShare = hNext;
         context->block = block;
         hNext = block->hNext;
     }
