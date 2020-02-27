@@ -102,9 +102,6 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
                 return;
         }
 
-        if (!hNext)
-            break;
-
         DWORD ref_pid = block->ref_pid;
         block = DoLock(hNext, ref_pid);
         if (!block)
