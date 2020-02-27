@@ -282,7 +282,7 @@ void MoveOwnership(DWORD pid)
 
     BLOCK *block = &s_first_block;
 
-    while (block)
+    do
     {
         BLOCK *next_block = DoLock(block->hNext, block->ref_pid);
 
@@ -310,7 +310,7 @@ void MoveOwnership(DWORD pid)
 
             block = next_block;
         }
-    }
+    } while (block);
 
     DoUnlock(block);
 }
