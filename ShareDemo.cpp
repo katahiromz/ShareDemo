@@ -99,7 +99,6 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_BLOCK_PROC proc)
             return;
 
         DoUnlockBlock(context->block);
-
         context->hShare = hNext;
         context->block = block;
         hNext = block->hNext;
@@ -233,7 +232,7 @@ bool RemoveByPidCallback(SHARE_CONTEXT *context, BLOCK *block)
 
 bool DisplayCallback(SHARE_CONTEXT *context, BLOCK *block)
 {
-    printf("--- BLOCK %d ---\n", context->id );
+    printf("--- BLOCK %d ---\n", context->id);
     printf("num_items:%d, hNext:%p, ref_pid:%u\n", block->num_items, block->hNext, block->ref_pid);
 
     for (int i = 0; i < BLOCK_CAPACITY; ++i)
