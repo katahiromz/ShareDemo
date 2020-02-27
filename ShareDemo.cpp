@@ -82,7 +82,7 @@ void DoUnlock(LPVOID block)
 
 void DoFree(HANDLE hShare, DWORD pid)
 {
-    if (!IsProcessRunning(pid))
+    if (!hShare || !pid || !IsProcessRunning(pid))
     {
         return;
     }
