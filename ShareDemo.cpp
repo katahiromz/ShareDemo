@@ -298,13 +298,11 @@ void MoveOwnership(DWORD pid)
             block->ref_pid = another_pid;
 
             DoUnlock(block);
-
             block = DoLock(hNewShare, another_pid);
         }
         else
         {
             DoUnlock(block);
-
             block = next_block;
         }
     } while (block);
