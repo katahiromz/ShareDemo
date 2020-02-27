@@ -107,7 +107,9 @@ void FindRoom(SHARE_CONTEXT *context, INT id, EACH_ITEM_PROC proc)
 
         ref_pid = block->ref_pid;
         if (!IsProcessRunning(ref_pid))
+        {
             break;
+        }
         block = (BLOCK *)DoLock(hNext, ref_pid);
 
         if (hShare && context->block)
@@ -172,6 +174,7 @@ void DoCompactingBlocks()
     s_first_block.hNext = NULL;
 
     DoFreeBlocks(hNext, s_first_block.ref_pid);
+    s_first_block.ref_pid = 0;
 }
 
 bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
@@ -263,12 +266,75 @@ void enter_key()
     fgets(buf, 8, stdin);
 }
 
+void MoveOwnership(DWORD pid)
+{
+    DWORD another_pid = 0;
+
+    for (size_t i = 0; i < BLOCK_CAPACITY; ++i)
+    {
+        if (s_first_block.items[i].id != 0 &&
+            s_first_block.items[i].pid != pid &&
+            IsProcessRunning(s_first_block.items[i].pid))
+        {
+            another_pid = s_first_block.items[i].pid;
+            break;
+        }
+    }
+
+    if (another_pid == 0)
+        return;
+
+    BLOCK *block = &s_first_block;
+    HANDLE hShare = NULL;
+    DWORD ref_pid = block->ref_pid;
+
+    while (block->hNext)
+    {
+        BLOCK *next_block = (BLOCK *)DoLock(block->hNext, block->ref_pid);
+        if (!next_block)
+            break;
+
+        if (ref_pid == pid)
+        {
+            HANDLE hNewShare = SHAllocShared(next_block, sizeof(BLOCK), another_pid);
+            if (hShare)
+                DoFree(hShare, pid);
+
+            block->hNext = hNewShare;
+            block->ref_pid = another_pid;
+            DoUnlock(block);
+
+            hShare = hNewShare;
+            block = (BLOCK *)DoLock(hShare, ref_pid);
+        }
+        else
+        {
+            hShare = next_block->hNext;
+            DoUnlock(block);
+            block = next_block;
+        }
+    }
+
+    if (!IsProcessRunning(block->ref_pid))
+    {
+        block->hNext = NULL;
+        block->ref_pid = 0;
+    }
+
+    if (block != &s_first_block)
+    {
+        DoUnlock(block);
+    }
+}
+
 void RemoveItemByPid(DWORD pid)
 {
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
     FindRoom(&context, 0, RemoveByPidCallback);
     if (context.hShare && context.block)
         DoUnlock(context.block);
+
+    MoveOwnership(pid);
 
     if (s_num < BLOCK_CAPACITY && s_first_block.hNext)
         DoCompactingBlocks();
