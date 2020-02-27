@@ -47,8 +47,6 @@ typedef struct SHARE_CONTEXT
     LPARAM lParam;
 } SHARE_CONTEXT;
 
-typedef bool (*EACH_BLOCK_PROC)(SHARE_CONTEXT *context, BLOCK *block);
-
 BOOL IsProcessRunning(DWORD pid)
 {
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, TRUE, pid);
@@ -84,6 +82,8 @@ void DoFreeBlock(HANDLE hShare, DWORD pid)
     printf("free: %p, %u\n", hShare, pid);
     SHFreeShared(hShare, pid);
 }
+
+typedef bool (*EACH_BLOCK_PROC)(SHARE_CONTEXT *context, BLOCK *block);
 
 void DoEnumItems(SHARE_CONTEXT *context, EACH_BLOCK_PROC proc)
 {
