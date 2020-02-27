@@ -92,9 +92,8 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
     HANDLE hShare = context->hShare;
     BLOCK *block = context->block;
     HANDLE hNext = block->hNext;
-    int iBlock = 0;
 
-    for (;;)
+    for (int iBlock = 0; ; ++iBlock)
     {
         for (int i = 0; i < BLOCK_CAPACITY; ++i)
         {
@@ -113,8 +112,6 @@ void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
         context->hShare = hShare;
         context->block = block;
         hNext = block->hNext;
-
-        ++iBlock;
     }
 }
 
