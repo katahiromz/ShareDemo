@@ -123,48 +123,6 @@ void FindRoom(SHARE_CONTEXT *context, INT id, EACH_ITEM_PROC proc)
     }
 }
 
-bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
-{
-    if (item->id != 0)
-        return true;
-
-    block->num++;
-    s_num++;
-
-    ++s_next_id;
-    int id = s_next_id;
-    item->id = id;
-    item->pid = context->pid;
-
-    context->id = id;
-    return false;
-}
-
-bool RemoveByPidCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
-{
-    if (context->pid != item->pid || item->pid == 0)
-        return true;
-
-    block->num--;
-    s_num--;
-    item->id = 0;
-    item->pid = 0;
-
-    return true;
-}
-
-bool CompactingCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
-{
-    if (!item->id)
-        return true;
-
-    INT num = context->id;
-    ITEM *pItems = (ITEM *)context->lParam;
-    pItems[num] = *item;
-    context->id++;
-    return true;
-}
-
 void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
 {
     if (!hShare)
@@ -181,6 +139,18 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
         DoFree(hShare, ref_pid);
         hShare = hNext;
     } while (hShare);
+}
+
+bool CompactingCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
+{
+    if (!item->id)
+        return true;
+
+    INT num = context->id;
+    ITEM *pItems = (ITEM *)context->lParam;
+    pItems[num] = *item;
+    context->id++;
+    return true;
 }
 
 void DoCompactingBlocks()
@@ -202,6 +172,23 @@ void DoCompactingBlocks()
     s_first_block.hNext = NULL;
 
     DoFreeBlocks(hNext, s_first_block.ref_pid);
+}
+
+bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
+{
+    if (item->id != 0)
+        return true;
+
+    block->num++;
+    s_num++;
+
+    ++s_next_id;
+    int id = s_next_id;
+    item->id = id;
+    item->pid = context->pid;
+
+    context->id = id;
+    return false;
 }
 
 int AddItem(void)
@@ -234,15 +221,17 @@ int AddItem(void)
     return id;
 }
 
-void RemoveItemByPid(DWORD pid)
+bool RemoveByPidCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
 {
-    SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
-    FindRoom(&context, 0, RemoveByPidCallback);
-    if (context.hShare && context.block)
-        DoUnlock(context.block);
+    if (context->pid != item->pid || item->pid == 0)
+        return true;
 
-    if (s_num < BLOCK_CAPACITY && s_first_block.hNext)
-        DoCompactingBlocks();
+    block->num--;
+    s_num--;
+    item->id = 0;
+    item->pid = 0;
+
+    return true;
 }
 
 bool DisplayCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
@@ -252,7 +241,7 @@ bool DisplayCallback(SHARE_CONTEXT *context, BLOCK *block, ITEM *item)
     {
         s_block = block;
         printf("--- BLOCK ---\n");
-        printf("num:%d, hNext:%p\n", block->num, block->hNext);
+        printf("num:%d, hNext:%p, ref_pid:%u\n", block->num, block->hNext, block->ref_pid);
     }
     printf("id:%d, pid:%lu\n", item->id, item->pid);
     return true;
@@ -267,16 +256,40 @@ void DisplayBlocks()
         DoUnlock(context.block);
 }
 
+void enter_key()
+{
+    char buf[8];
+    rewind(stdin);
+    fgets(buf, 8, stdin);
+}
+
+void RemoveItemByPid(DWORD pid)
+{
+    SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
+    FindRoom(&context, 0, RemoveByPidCallback);
+    if (context.hShare && context.block)
+        DoUnlock(context.block);
+
+    if (s_num < BLOCK_CAPACITY && s_first_block.hNext)
+        DoCompactingBlocks();
+}
+
 int main(void)
 {
+    printf("pid<>: %lu\n", GetCurrentProcessId());
     int id = AddItem();
     printf("id %d added\n", id);
     DisplayBlocks();
 
     printf("Press Enter key\n");
     fflush(stdout);
-    getchar();
+    enter_key();
 
     RemoveItemByPid(GetCurrentProcessId());
+
+    DisplayBlocks();
+    printf("Press Enter key\n");
+    fflush(stdout);
+    enter_key();
     return 0;
 }
