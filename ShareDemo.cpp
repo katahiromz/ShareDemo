@@ -49,7 +49,7 @@ typedef struct SHARE_CONTEXT
     LPARAM lParam;
 } SHARE_CONTEXT;
 
-typedef bool (*EACH_ITEM_PROC)(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item);
+typedef bool (*EACH_BLOCK_PROC)(SHARE_CONTEXT *context, int iBlock, BLOCK *block);
 
 BOOL IsProcessRunning(DWORD pid)
 {
@@ -87,18 +87,15 @@ void DoFreeBlock(HANDLE hShare, DWORD pid)
     SHFreeShared(hShare, pid);
 }
 
-void DoEnumItems(SHARE_CONTEXT *context, EACH_ITEM_PROC proc)
+void DoEnumItems(SHARE_CONTEXT *context, EACH_BLOCK_PROC proc)
 {
     BLOCK *block = context->block;
     HANDLE hNext = block->hNext;
 
     for (int iBlock = 0; ; ++iBlock)
     {
-        for (int i = 0; i < BLOCK_CAPACITY; ++i)
-        {
-            if (!(*proc)(context, iBlock, block, &block->items[i]))
-                return;
-        }
+        if (!(*proc)(context, iBlock, block))
+            return;
 
         block = DoLockBlock(hNext, block->ref_pid);
         if (!block)
@@ -131,15 +128,19 @@ void DoFreeBlocks(HANDLE hShare, DWORD ref_pid)
     } while (hShare);
 }
 
-bool CompactingCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
+bool CompactingCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
 {
-    if (!item->id)
-        return true;
+    for (int i = 0; i < BLOCK_CAPACITY; ++i)
+    {
+        ITEM *item = &block->items[i];
+        if (!item->id)
+            continue;
 
-    INT num_items = context->id;
-    ITEM *pItems = (ITEM *)context->lParam;
-    pItems[num_items] = *item;
-    context->id++;
+        INT num_items = context->id;
+        ITEM *pItems = (ITEM *)context->lParam;
+        pItems[num_items] = *item;
+        context->id++;
+    }
     return true;
 }
 
@@ -166,21 +167,27 @@ void DoCompactBlocks(void)
     s_first_block.ref_pid = 0;
 }
 
-bool AddItemCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
+bool AddItemCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
 {
-    if (item->id != 0)
-        return true;
+    for (int i = 0; i < BLOCK_CAPACITY; ++i)
+    {
+        ITEM *item = &block->items[i];
+        if (item->id != 0)
+            continue;
 
-    block->num_items++;
-    s_num_items++;
+        block->num_items++;
+        s_num_items++;
 
-    ++s_next_id;
-    int id = s_next_id;
-    item->id = id;
-    item->pid = context->pid;
+        ++s_next_id;
+        int id = s_next_id;
+        item->id = id;
+        item->pid = context->pid;
 
-    context->id = id;
-    return false;
+        context->id = id;
+        return false;
+    }
+
+    return true;
 }
 
 int AddItem(DWORD pid)
@@ -211,36 +218,39 @@ int AddItem(DWORD pid)
     return id;
 }
 
-bool RemoveByPidCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
+bool RemoveByPidCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
 {
-    if (context->pid != item->pid || item->pid == 0)
-        return true;
+    for (int i = 0; i < BLOCK_CAPACITY; ++i)
+    {
+        ITEM *item = &block->items[i];
+        if (context->pid != item->pid || item->pid == 0)
+            continue;
 
-    block->num_items--;
-    s_num_items--;
-    item->id = 0;
-    item->pid = 0;
+        block->num_items--;
+        s_num_items--;
+        item->id = 0;
+        item->pid = 0;
+    }
     return true;
 }
 
-static int s_iBlock = -1;
-
-bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block, ITEM *item)
+bool DisplayCallback(SHARE_CONTEXT *context, int iBlock, BLOCK *block)
 {
-    if (s_iBlock != iBlock)
+    printf("--- BLOCK %d ---\n", iBlock);
+    printf("num_items:%d, hNext:%p, ref_pid:%u\n", block->num_items, block->hNext, block->ref_pid);
+
+    for (int i = 0; i < BLOCK_CAPACITY; ++i)
     {
-        s_iBlock = iBlock;
-        printf("--- BLOCK %d ---\n", iBlock);
-        printf("num_items:%d, hNext:%p, ref_pid:%u\n", block->num_items, block->hNext, block->ref_pid);
+        ITEM *item = &block->items[i];
+        printf("id:%d, pid:%lu\n", item->id, item->pid);
     }
-    printf("id:%d, pid:%lu\n", item->id, item->pid);
+
     return true;
 }
 
 void DisplayBlocks()
 {
     printf("s_num_items: %d\n", s_num_items);
-    s_iBlock = -1;
     SHARE_CONTEXT context = { NULL, &s_first_block, GetCurrentProcessId() };
     DoEnumItems(&context, DisplayCallback);
     DoUnlockBlock(context.block);
