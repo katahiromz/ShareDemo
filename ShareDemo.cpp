@@ -5,7 +5,7 @@
 
 typedef struct ITEM
 {
-    int id;
+    DWORD id;
     DWORD pid;
 } ITEM;
 
@@ -31,7 +31,7 @@ typedef struct BLOCK
     #pragma data_seg(".shared")
 #endif
 static int s_num_items SHELL32SHARE = 0;
-static int s_next_id SHELL32SHARE = 0;
+static DWORD s_next_id SHELL32SHARE = 0;
 static BLOCK s_first_block SHELL32SHARE = { 0 };
 #ifdef _MSC_VER
     #pragma data_seg()
@@ -43,7 +43,7 @@ typedef struct SHARE_CONTEXT
     HANDLE hShare;
     BLOCK *block;
     DWORD pid;
-    int id;
+    DWORD id;
     LPARAM lParam;
 } SHARE_CONTEXT;
 
@@ -168,7 +168,7 @@ bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block)
         block->num_items++;
         s_num_items++;
 
-        int id = ++s_next_id;
+        DWORD id = ++s_next_id;
         item->id = id;
         item->pid = context->pid;
         context->id = id;
@@ -178,13 +178,13 @@ bool AddItemCallback(SHARE_CONTEXT *context, BLOCK *block)
     return true;
 }
 
-int AddItem(DWORD pid)
+DWORD AddItem(DWORD pid)
 {
     SHARE_CONTEXT context = { NULL, &s_first_block, pid };
     DoEnumItems(&context, AddItemCallback);
     BLOCK *block = context.block;
 
-    int id = context.id;
+    DWORD id = context.id;
     if (id == 0)
     {
         id = ++s_next_id;
@@ -245,17 +245,26 @@ void enter_key(void)
     getchar();
 }
 
-DWORD GetAnotherPid(DWORD pid)
+bool AnotherPidCallback(SHARE_CONTEXT *context, BLOCK *block)
 {
-    for (size_t i = 0; i < BLOCK_CAPACITY; ++i)
+    for (int i = 0; i < BLOCK_CAPACITY; ++i)
     {
-        ITEM *item = &s_first_block.items[i];
-        if (item->id != 0 && item->pid != pid && IsProcessRunning(item->pid))
+        ITEM *item = &block->items[i];
+        if (item->id && item->pid != context->pid)
         {
-            return item->pid;
+            context->id = item->pid;
+            return false;
         }
     }
-    return 0;
+    return true;
+}
+
+DWORD GetAnotherPid(DWORD pid)
+{
+    SHARE_CONTEXT context = { NULL, &s_first_block, pid };
+    DoEnumItems(&context, AnotherPidCallback);
+    DoUnlockBlock(context.block);
+    return context.id;
 }
 
 void MoveOwnership(DWORD pid)
@@ -315,8 +324,8 @@ int main(void)
     DWORD pid = GetCurrentProcessId();
     printf("pid: %lu\n", pid);
 
-    int id = AddItem(pid);
-    printf("id %d added\n", id);
+    DWORD id = AddItem(pid);
+    printf("id %lu added\n", id);
     DisplayBlocks();
     enter_key();
 
